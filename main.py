@@ -34,6 +34,9 @@ async def process_image(file: UploadFile, processing_type: Processing_type= Proc
     np_array=np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
 
+    if img is None:
+        return {"error": "Could not decode image. Please upload a valid image file (JPG, PNG, BMP, etc.)."}
+
     if processing_type == Processing_type.grayscale:
         result= cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     elif processing_type == Processing_type.negative:
