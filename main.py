@@ -8,7 +8,7 @@ import io
 
 
 app = FastAPI()
-face_cascade=cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+face_net = cv2.dnn.readNetFromCaffe("models/deploy.prototxt", "models/res10_300x300_ssd_iter_140000.caffemodel")
 
 class Processing_type(str, Enum):
     grayscale = "Grayscale"
@@ -45,11 +45,18 @@ async def process_image(file: UploadFile, processing_type: Processing_type= Proc
         gray_img=cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         result= cv2.Canny(gray_img, 30, 70)
     elif processing_type == Processing_type.face_detection:
-        gray_img=cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        faces=face_cascade.detectMultiScale(gray_img, scaleFactor=1.1, minNeighbors=7)
-        result=img.copy()
-        for(x,y,w,h) in faces:
-            cv2.rectangle(result, (x,y), (x+w, y+h), (0, 255, 0), 3)
+        result = img.copy()
+        (h, w) = img.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(img, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
+        face_net.setInput(blob)
+        detections = face_net.forward()
+
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5:
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
+                cv2.rectangle(result, (startX, startY), (endX, endY), (0, 255, 0), 2)
     
     success, encoded_image=cv2.imencode(".jpg", result)
     return StreamingResponse(io.BytesIO(encoded_image.tobytes()),media_type="image/jpeg")
