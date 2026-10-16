@@ -1,3 +1,4 @@
+from dbm import dumb
 from base64 import encode
 from fastapi import FastAPI, UploadFile
 from fastapi.responses import StreamingResponse
@@ -5,7 +6,10 @@ from enum import Enum
 import cv2
 import numpy as np 
 import io
+from data_base import engine, SessionLocal
+from db_models import ProcessedImage,Base
 
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 face_net = cv2.dnn.readNetFromCaffe("models/deploy.prototxt", "models/res10_300x300_ssd_iter_140000.caffemodel")
@@ -30,6 +34,7 @@ async def upload_image(file: UploadFile):
     }
 @app.post("/process_image")
 async def process_image(file: UploadFile, processing_type: Processing_type= Processing_type.grayscale):
+    
     contents = await file.read()
     np_array=np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
@@ -59,5 +64,12 @@ async def process_image(file: UploadFile, processing_type: Processing_type= Proc
                 cv2.rectangle(result, (startX, startY), (endX, endY), (0, 255, 0), 2)
     
     success, encoded_image=cv2.imencode(".jpg", result)
+
+    db = SessionLocal()
+    new_record = ProcessedImage(filename=file.filename, processing_type=processing_type.value)
+    db.add(new_record)
+    db.commit()
+    db.close()
+    
     return StreamingResponse(io.BytesIO(encoded_image.tobytes()),media_type="image/jpeg")
     
