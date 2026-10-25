@@ -19,6 +19,19 @@ class Processing_type(str, Enum):
     edges="Edges"
     face_detection="Face Detection"
 
+MAX_FILENAME_LENGTH = 255
+
+def log_processed_image(filename: str | None, processing_type: str) -> None:
+    db = SessionLocal()
+    try:
+        db.add(ProcessedImage(
+            filename=(filename or "unknown")[:MAX_FILENAME_LENGTH],
+            processing_type=processing_type,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
 @app.get("/")
 def read_root():
     return {"message": "Hello World"}
@@ -64,11 +77,7 @@ async def process_image(file: UploadFile, processing_type: Processing_type= Proc
     
     success, encoded_image=cv2.imencode(".jpg", result)
 
-    db = SessionLocal()
-    new_record = ProcessedImage(filename=file.filename, processing_type=processing_type.value)
-    db.add(new_record)
-    db.commit()
-    db.close()
+    log_processed_image(file.filename, processing_type.value)
     
     return StreamingResponse(io.BytesIO(encoded_image.tobytes()),media_type="image/jpeg")
     

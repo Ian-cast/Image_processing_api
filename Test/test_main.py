@@ -52,3 +52,12 @@ def test_process_image_invalid_format():
     )
     assert response.status_code == 200
     assert "error" in response.json()
+    
+def test_process_image_long_filename():
+    test_image = create_test_image()
+    long_name = "a" * 300 + ".jpg"
+    response = client.post(
+        "/process_image?processing_type=Grayscale",
+        files={"file": (long_name, test_image, "image/jpeg")}
+    )
+    assert response.status_code == 200
