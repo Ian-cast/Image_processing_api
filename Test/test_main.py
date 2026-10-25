@@ -50,9 +50,17 @@ def test_process_image_invalid_format():
         "/process_image?processing_type=Grayscale",
         files={"file": ("fake.txt", fake_file, "text/plain")}
     )
-    assert response.status_code == 200
-    assert "error" in response.json()
-    
+    assert response.status_code == 415
+    assert "detail" in response.json()
+
+
+def test_process_image_empty_file():
+    response = client.post(
+        "/process_image?processing_type=Grayscale",
+        files={"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")}
+    )
+    assert response.status_code == 400
+
 def test_process_image_long_filename():
     test_image = create_test_image()
     long_name = "a" * 300 + ".jpg"

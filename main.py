@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from enum import Enum
 import cv2
@@ -7,6 +7,7 @@ import numpy as np
 import io
 from data_base import engine, SessionLocal
 from db_models import ProcessedImage,Base
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -48,12 +49,17 @@ async def upload_image(file: UploadFile):
 async def process_image(file: UploadFile, processing_type: Processing_type= Processing_type.grayscale):
     
     contents = await file.read()
-    np_array=np.frombuffer(contents, np.uint8)
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file. Please upload an image.")
+
+    np_array = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
 
     if img is None:
-        return {"error": "Could not decode image. Please upload a valid image file (JPG, PNG, BMP, etc.)."}
-
+        raise HTTPException(
+            status_code=415,
+            detail="Could not decode image. Please upload a valid image file (JPG, PNG, BMP, etc.).",
+        )
     if processing_type == Processing_type.grayscale:
         result= cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     elif processing_type == Processing_type.negative:
