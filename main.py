@@ -7,6 +7,7 @@ import numpy as np
 import io
 from data_base import engine, SessionLocal
 from db_models import ProcessedImage,Base
+from PIL import Image, UnidentifiedImageError
 
 
 Base.metadata.create_all(bind=engine)
@@ -21,7 +22,8 @@ class Processing_type(str, Enum):
     face_detection="Face Detection"
 
 MAX_FILENAME_LENGTH = 255
-
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_IMAGE_PIXELS = 16_000_000        # 16 megapixels, about 4000 x 4000
 def log_processed_image(filename: str | None, processing_type: str) -> None:
     db = SessionLocal()
     try:
@@ -48,9 +50,32 @@ async def upload_image(file: UploadFile):
 @app.post("/process_image")
 async def process_image(file: UploadFile, processing_type: Processing_type= Processing_type.grayscale):
     
-    contents = await file.read()
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if not contents:
         raise HTTPException(status_code=400, detail="Empty file. Please upload an image.")
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. The maximum size is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
+
+    # Read only the image header to get its dimensions, without decoding the pixels.
+    try:
+        with Image.open(io.BytesIO(contents)) as probe:
+            width, height = probe.size
+    except Image.DecompressionBombError:
+        raise HTTPException(status_code=422, detail="Image dimensions are too large.")
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(
+            status_code=415,
+            detail="Could not read the file as an image. Please upload a valid image file (JPG, PNG, BMP, etc.).",
+        )
+
+    if width * height > MAX_IMAGE_PIXELS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Image too large. The maximum is {MAX_IMAGE_PIXELS // 1_000_000} megapixels.",
+        )
 
     np_array = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)

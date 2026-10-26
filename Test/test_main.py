@@ -5,7 +5,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from main import app
+from main import app, MAX_UPLOAD_BYTES, MAX_IMAGE_PIXELS
 
 client = TestClient(app)
 
@@ -69,3 +69,24 @@ def test_process_image_long_filename():
         files={"file": (long_name, test_image, "image/jpeg")}
     )
     assert response.status_code == 200
+
+def test_process_image_file_too_large():
+    big_file = io.BytesIO(b"0" * (MAX_UPLOAD_BYTES + 1))
+    response = client.post(
+        "/process_image?processing_type=Grayscale",
+        files={"file": ("big.jpg", big_file, "image/jpeg")}
+    )
+    assert response.status_code == 413
+
+
+def test_process_image_too_many_pixels():
+    side = int(MAX_IMAGE_PIXELS ** 0.5) + 1
+    img = Image.new("1", (side, side))  # 1-bit image: many pixels, tiny file
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    response = client.post(
+        "/process_image?processing_type=Grayscale",
+        files={"file": ("huge.png", buf, "image/png")}
+    )
+    assert response.status_code == 422
