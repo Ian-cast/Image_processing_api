@@ -39,14 +39,6 @@ def log_processed_image(filename: str | None, processing_type: str) -> None:
 def read_root():
     return {"message": "Hello World"}
 
-@app.post("/upload_image")
-async def upload_image(file: UploadFile):
-    contents = await file.read()
-    return{
-        "filename": file.filename,
-        "content_type": file.content_type,
-        "size_in_bytes": len(contents)
-    }
 @app.post("/process_image")
 async def process_image(file: UploadFile, processing_type: Processing_type= Processing_type.grayscale):
     

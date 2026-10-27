@@ -23,17 +23,6 @@ def test_read_root():
     assert response.status_code == 200
     assert response.json() == {"message": "Hello World"}
 
-
-def test_upload_image():
-    test_image = create_test_image()
-    response = client.post(
-        "/upload_image",
-        files={"file": ("test.jpg", test_image, "image/jpeg")}
-    )
-    assert response.status_code == 200
-    assert response.json()["filename"] == "test.jpg"
-
-
 def test_process_image_grayscale():
     test_image = create_test_image()
     response = client.post(
