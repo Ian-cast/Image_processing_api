@@ -1,6 +1,10 @@
 
-from fastapi import FastAPI, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
+import os
+from fastapi import FastAPI, UploadFile, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from enum import Enum
 import cv2
 import numpy as np 
@@ -12,7 +16,21 @@ from PIL import Image, UnidentifiedImageError
 
 Base.metadata.create_all(bind=engine)
 
+RATE_LIMIT = os.getenv("RATE_LIMIT", "10/minute")
+
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many requests. Please try again in a minute."},
+        headers={"Retry-After": "60"},
+    )
+
 face_net = cv2.dnn.readNetFromCaffe("models/deploy.prototxt", "models/res10_300x300_ssd_iter_140000.caffemodel")
 
 class Processing_type(str, Enum):
@@ -40,7 +58,8 @@ def read_root():
     return {"message": "Hello World"}
 
 @app.post("/process_image")
-async def process_image(file: UploadFile, processing_type: Processing_type= Processing_type.grayscale):
+@limiter.limit(RATE_LIMIT)
+async def process_image(request: Request, file: UploadFile, processing_type: Processing_type= Processing_type.grayscale):
     
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if not contents:

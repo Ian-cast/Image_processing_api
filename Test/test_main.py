@@ -1,14 +1,19 @@
 from fastapi.testclient import TestClient
 from PIL import Image
+import pytest
 import io
 import sys
 import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from main import app, MAX_UPLOAD_BYTES, MAX_IMAGE_PIXELS
+from main import app,limiter, MAX_UPLOAD_BYTES, MAX_IMAGE_PIXELS, RATE_LIMIT
 
 client = TestClient(app)
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    limiter.reset() 
+    yield
 
 def create_test_image():
     img = Image.new("RGB", (100, 100), color="blue")
@@ -79,3 +84,15 @@ def test_process_image_too_many_pixels():
         files={"file": ("huge.png", buf, "image/png")}
     )
     assert response.status_code == 422
+
+def test_rate_limit_returns_429():
+    allowed = int(RATE_LIMIT.split("/")[0])
+    statuses = []
+    for _ in range(allowed + 1):
+        response = client.post(
+            "/process_image?processing_type=Grayscale",
+            files={"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")}
+        )
+        statuses.append(response.status_code)
+    assert statuses[:-1] == [400] * allowed
+    assert statuses[-1] == 429
